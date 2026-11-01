@@ -1,0 +1,454 @@
+{
+  "source_run": "eval_quality_6ed7a1db1ddb4e3bb11908d14a69ae89",
+  "profile": "bge-m3-v2",
+  "review_count": 19,
+  "reviews": [
+    {
+      "case_id": "eval_case_hn_0b14772f1918593ad8a3c96a",
+      "query": "帮我写订单系统代码",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "handoff",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "handoff",
+      "reason_codes": [
+        "UNSUPPORTED_SCOPE"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": "订单",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_b78379964fa4641252585d56",
+      "query": "写一首关于快递的诗",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "handoff",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "handoff",
+      "reason_codes": [
+        "UNSUPPORTED_SCOPE"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": "物流",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_d76eae7c5b7a284a601dc6ca",
+      "query": "退货商品摄影教程",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "handoff",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "handoff",
+      "reason_codes": [
+        "UNSUPPORTED_SCOPE"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": null,
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_6f71e25e2b97e43f34b43904",
+      "query": "会员健身计划",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "handoff",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "handoff",
+      "reason_codes": [
+        "UNSUPPORTED_SCOPE"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": "会员",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_faef0eca5af4ed8aa9d9388d",
+      "query": "补偿金额如何投资",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "handoff",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "handoff",
+      "reason_codes": [
+        "UNSUPPORTED_SCOPE"
+      ],
+      "required_facts": [
+        "amount"
+      ],
+      "policy_family_or_scope": "补偿",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_ede5490f05c173918c0fdc14",
+      "query": "用售后术语解释量子力学",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "handoff",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "handoff",
+      "reason_codes": [
+        "UNSUPPORTED_SCOPE"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": "售后",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_37f97e832d85a5d20f2b10f9",
+      "query": "快递主题旅行攻略",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "handoff",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "handoff",
+      "reason_codes": [
+        "UNSUPPORTED_SCOPE"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": "物流",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_8258736ffecb7937b9199921",
+      "query": "会员等级星座运势",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "handoff",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "handoff",
+      "reason_codes": [
+        "UNSUPPORTED_SCOPE"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": "会员",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_4b4ce7f57ef3d65a33ec46f4",
+      "query": "商品可以补偿吗",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [
+        "eligibility"
+      ],
+      "policy_family_or_scope": null,
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_e1186fdc38744b183f29860c",
+      "query": "物流异常怎么补偿",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": null,
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_8a21eb431909824b37580a5c",
+      "query": "退货需要什么",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": "售后",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_1afa384a6be436e4f9330c7d",
+      "query": "会员有什么售后资格",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [
+        "eligibility"
+      ],
+      "policy_family_or_scope": null,
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_ba26744c61870e46ca677fe0",
+      "query": "订单能否赔付",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "handoff",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [
+        "eligibility"
+      ],
+      "policy_family_or_scope": null,
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_9ad732509ae36a610f76cf22",
+      "query": "配送延误可以获得多少补偿",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [
+        "eligibility"
+      ],
+      "policy_family_or_scope": null,
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_e3b1025ca3313ef39174ad41",
+      "query": "商品问题支持哪些处理",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [
+        "eligibility"
+      ],
+      "policy_family_or_scope": "订单",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_ce3bf590846f08b7e0874ca3",
+      "query": "物流异常的具体赔付规则",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [],
+      "policy_family_or_scope": null,
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_405744ba15fbd73b21ea29f9",
+      "query": "订单取消需要满足什么资格",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [
+        "eligibility"
+      ],
+      "policy_family_or_scope": "订单",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_79d98a35969363fdc419c414",
+      "query": "工单处理金额是多少",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "answer",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [
+        "amount"
+      ],
+      "policy_family_or_scope": "售后",
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    },
+    {
+      "case_id": "eval_case_hn_6ff0d46abc8c13a26ea226ef",
+      "query": "退货政策是否自动发放补偿",
+      "filters": {
+        "channel": "web"
+      },
+      "original_expected_decision": "clarify",
+      "actual_decision": "handoff",
+      "system_error": true,
+      "annotation_error": false,
+      "correct_decision": "clarify",
+      "reason_codes": [
+        "MISSING_FACT",
+        "MISSING_CONTEXT"
+      ],
+      "required_facts": [
+        "eligibility"
+      ],
+      "policy_family_or_scope": null,
+      "allowed_citations": [],
+      "forbidden_citations": [],
+      "review_reason": "Historical failure retained; Gate v4 and new datasets are evaluated separately.",
+      "reviewed_by": "week4-quality-review",
+      "reviewed_at": "2026-10-27T16:06:35.960817+00:00"
+    }
+  ]
+}

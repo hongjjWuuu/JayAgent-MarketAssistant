@@ -1,0 +1,48 @@
+[project]
+name = "jayagent-market-assistant"
+version = "0.6.0rc1"
+description = "A governed multi-tenant market-facing customer service agent."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14.0",
+    "psycopg[binary]>=3.2.3",
+    "pgvector>=0.3.6",
+    "redis>=5.2.0",
+    "pyjwt[crypto]>=2.10.0",
+    "httpx>=0.28.0",
+    "prometheus-client>=0.21.0",
+    "langgraph>=0.2.60",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.6.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires a real PostgreSQL database",
+    "oidc_integration: requires a real Keycloak and API",
+    "live_llm: requires a configured external OpenAI-compatible provider",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+

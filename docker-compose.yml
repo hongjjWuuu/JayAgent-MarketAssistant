@@ -1,0 +1,176 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: market_agent
+      POSTGRES_USER: market_agent
+      POSTGRES_PASSWORD: market_agent
+    ports: ["${POSTGRES_PORT:-5433}:5432"]
+    volumes: ["market-postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U market_agent -d market_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 1g
+    cpus: 1.0
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports: ["${REDIS_PORT:-6380}:6379"]
+    volumes: ["market-redis:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 256m
+    cpus: 0.50
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports: ["${KEYCLOAK_PORT:-8080}:8080"]
+    volumes:
+      - ./deploy/keycloak/market-assistant-realm.json:/opt/keycloak/data/import/market-assistant-realm.json:ro
+    mem_limit: 1g
+    cpus: 1.0
+  embedding:
+    image: michaelf34/infinity@sha256:94db836145f609c508f3f296f3b9bd0e78ae088025e879664d073dfd9f929e96
+    command: v2 --engine torch --model-id BAAI/bge-m3 --port 7997
+    environment:
+      HF_HOME: /app/.cache
+      INFINITY_ANONYMOUS_USAGE_STATS: "0"
+    ports: ["${EMBEDDING_PORT:-7997}:7997"]
+    volumes: ["market-embedding-cache:/app/.cache"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7997/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 120s
+    mem_limit: 4g
+    cpus: 2.0
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+psycopg://market_agent:market_agent@postgres:5432/market_agent
+      PERSISTENCE_BACKEND: postgres
+    depends_on:
+      postgres: {condition: service_healthy}
+  seed:
+    build: .
+    command: python scripts/seed_demo.py
+    environment:
+      DATABASE_URL: postgresql+psycopg://market_agent:market_agent@postgres:5432/market_agent
+      PERSISTENCE_BACKEND: postgres
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  simulator:
+    build: .
+    command: uvicorn simulator.main:app --host 0.0.0.0 --port 8090
+    environment:
+      SIMULATOR_DB_PATH: /data/simulator.db
+      SIMULATOR_CONTROL_TOKEN: ${SIMULATOR_CONTROL_TOKEN:-m3-drill-control}
+    ports: ["${SIMULATOR_PORT:-8090}:8090"]
+    volumes: ["market-simulator:/data"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 256m
+    cpus: 0.50
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql+psycopg://market_agent:market_agent@postgres:5432/market_agent
+      REDIS_URL: redis://redis:6379/0
+      PERSISTENCE_BACKEND: postgres
+      APP_ENV: production
+      AUTH_MODE: oidc
+      ALLOW_DEV_AUTH: "false"
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8080}/realms/market-assistant
+      OIDC_JWKS_URL: http://keycloak:8080/realms/market-assistant/protocol/openid-connect/certs
+      EMBEDDING_BASE_URL: http://embedding:7997
+      EMBEDDING_MODEL: BAAI/bge-m3
+      EMBEDDING_DIMENSION: "1024"
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      BUSINESS_CONNECTOR_MODE: ${BUSINESS_CONNECTOR_MODE:-repository}
+      BUSINESS_CONNECTOR_BASE_URL: ${BUSINESS_CONNECTOR_BASE_URL:-http://simulator:8090}
+      BUSINESS_CONNECTOR_API_KEY: ${BUSINESS_CONNECTOR_API_KEY:-}
+      BUSINESS_CONNECTOR_TIMEOUT_SECONDS: ${BUSINESS_CONNECTOR_TIMEOUT_SECONDS:-5}
+      CORS_ORIGINS: http://localhost:${WEB_PORT:-5173},http://127.0.0.1:${WEB_PORT:-5173}
+    ports: ["${API_PORT:-8000}:8000"]
+    depends_on:
+      seed: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+      keycloak: {condition: service_started}
+      simulator: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    mem_limit: 1g
+    cpus: 1.0
+  worker:
+    build: .
+    command: python -m app.runtime.worker
+    environment:
+      DATABASE_URL: postgresql+psycopg://market_agent:market_agent@postgres:5432/market_agent
+      REDIS_URL: redis://redis:6379/0
+      PERSISTENCE_BACKEND: postgres
+      EMBEDDING_BASE_URL: http://embedding:7997
+      EMBEDDING_MODEL: BAAI/bge-m3
+      EMBEDDING_DIMENSION: "1024"
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      BUSINESS_CONNECTOR_MODE: ${BUSINESS_CONNECTOR_MODE:-repository}
+      BUSINESS_CONNECTOR_BASE_URL: ${BUSINESS_CONNECTOR_BASE_URL:-http://simulator:8090}
+      BUSINESS_CONNECTOR_API_KEY: ${BUSINESS_CONNECTOR_API_KEY:-}
+      BUSINESS_CONNECTOR_TIMEOUT_SECONDS: ${BUSINESS_CONNECTOR_TIMEOUT_SECONDS:-5}
+      WORKER_METRICS_PORT: "9100"
+    depends_on:
+      seed: {condition: service_completed_successfully}
+    mem_limit: 1g
+    cpus: 1.0
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_AUTH_MODE: oidc
+        VITE_API_URL: http://localhost:${API_PORT:-8000}
+        VITE_KEYCLOAK_URL: http://localhost:${KEYCLOAK_PORT:-8080}
+    ports: ["${WEB_PORT:-5173}:80"]
+    depends_on:
+      api: {condition: service_healthy}
+    mem_limit: 256m
+    cpus: 0.50
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    ports: ["${PROMETHEUS_PORT:-9090}:9090"]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - market-prometheus:/prometheus
+    depends_on:
+      api: {condition: service_healthy}
+    mem_limit: 512m
+    cpus: 0.50
+volumes:
+  market-postgres:
+  market-redis:
+  market-embedding-cache:
+  market-prometheus:
+  market-simulator:

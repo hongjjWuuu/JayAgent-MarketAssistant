@@ -1,0 +1,64 @@
+groups:
+  - name: market-assistant-pilot
+    rules:
+      - alert: MarketAssistantApiDown
+        expr: up{job="market-assistant-api"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Market Assistant API is unavailable"
+      - alert: MarketAssistantHighServerErrorRate
+        expr: sum(rate(market_assistant_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(market_assistant_http_requests_total[5m])), 1) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "API 5xx rate is above 5%"
+      - alert: MarketAssistantHighP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(market_assistant_http_request_seconds_bucket[5m]))) > 8
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "API P95 latency is above the pilot threshold"
+      - alert: MarketAssistantWorkerLost
+        expr: market_assistant_workers{state="lost"} > 0 or up{job="market-assistant-worker"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "A worker heartbeat or metrics target is missing"
+      - alert: MarketAssistantTaskBacklog
+        expr: sum(market_assistant_runtime_tasks{status=~"queued|retry_wait"}) > 10
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Durable task backlog is growing"
+      - alert: MarketAssistantDeadLetterPresent
+        expr: market_assistant_dead_letters > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "At least one task reached the dead-letter state"
+      - alert: MarketAssistantUnknownReconciliationStale
+        expr: market_assistant_unknown_reconciliations > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "An external write remains unknown for more than five minutes"
+      - alert: MarketAssistantConnectorFailure
+        expr: sum(rate(market_assistant_connector_requests_total{outcome=~"server_error|timeout|network_error"}[5m])) > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "The business connector is returning failures"
+      - alert: MarketAssistantLlmFailures
+        expr: sum(market_assistant_llm_failures) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Persisted LLM failures require review"
+      - alert: MarketAssistantDeterministicOrderLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(market_assistant_connector_duration_seconds_bucket{operation="get_order"}[5m]))) > 1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Deterministic order lookup P95 exceeds one second"
+

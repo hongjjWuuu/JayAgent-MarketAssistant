@@ -1,0 +1,29 @@
+{
+  "name": "jayagent-market-assistant-web",
+  "private": true,
+  "version": "0.6.0-rc1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.4.1",
+    "keycloak-js": "latest",
+    "vite": "^6.3.5",
+    "typescript": "^5.7.3",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "latest",
+    "@testing-library/react": "latest",
+    "@playwright/test": "^1.52.0",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "jsdom": "^26.1.0",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "realm": "market-assistant",
+  "enabled": true,
+  "roles": {"realm": [{"name": "customer"}, {"name": "agent"}, {"name": "tenant_admin"}, {"name": "platform_admin"}]},
+  "clients": [
+    {"clientId": "market-assistant-web", "publicClient": true, "standardFlowEnabled": true, "directAccessGrantsEnabled": true, "redirectUris": ["http://localhost:5173/*", "http://localhost:15173/*"], "webOrigins": ["http://localhost:5173", "http://localhost:15173"], "attributes": {"pkce.code.challenge.method": "S256"}, "protocolMappers": [
+      {"name": "tenant-id", "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-attribute-mapper", "consentRequired": false, "config": {"user.attribute": "tenant_id", "claim.name": "tenant_id", "jsonType.label": "String", "id.token.claim": "true", "access.token.claim": "true"}},
+      {"name": "api-audience", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false, "config": {"included.client.audience": "market-assistant-api", "access.token.claim": "true"}}
+    ]},
+    {"clientId": "market-assistant-api", "publicClient": false, "serviceAccountsEnabled": true, "secret": "market-assistant-dev-secret"}
+  ],
+  "users": [
+    {"id": "11111111-1111-4111-8111-111111111111", "username": "customer_001", "firstName": "Demo", "lastName": "Customer", "email": "customer@example.test", "emailVerified": true, "requiredActions": [], "enabled": true, "credentials": [{"type": "password", "value": "demo1234", "temporary": false}], "realmRoles": ["customer"], "attributes": {"tenant_id": ["tenant_demo"]}},
+    {"id": "22222222-2222-4222-8222-222222222222", "username": "agent_001", "firstName": "Demo", "lastName": "Agent", "email": "agent@example.test", "emailVerified": true, "requiredActions": [], "enabled": true, "credentials": [{"type": "password", "value": "demo1234", "temporary": false}], "realmRoles": ["agent"], "attributes": {"tenant_id": ["tenant_demo"]}},
+    {"id": "33333333-3333-4333-8333-333333333333", "username": "admin_001", "firstName": "Demo", "lastName": "TenantAdmin", "email": "tenant-admin@example.test", "emailVerified": true, "requiredActions": [], "enabled": true, "credentials": [{"type": "password", "value": "demo1234", "temporary": false}], "realmRoles": ["tenant_admin"], "attributes": {"tenant_id": ["tenant_demo"]}},
+    {"id": "44444444-4444-4444-8444-444444444444", "username": "platform_admin_001", "firstName": "Demo", "lastName": "PlatformAdmin", "email": "platform-admin@example.test", "emailVerified": true, "requiredActions": [], "enabled": true, "credentials": [{"type": "password", "value": "demo1234", "temporary": false}], "realmRoles": ["platform_admin"], "attributes": {"tenant_id": ["tenant_platform"]}}
+  ]
+}
