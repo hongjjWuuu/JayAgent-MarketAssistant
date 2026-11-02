@@ -110,6 +110,9 @@ Week 4.2、BGE 对照和 Week 5 验收：
 M3 试点交付验收：
 
 ```powershell
+Copy-Item .env.m3-drill.example .env.m3-drill
+# 编辑本地 .env.m3-drill，为 SIMULATOR_CONTROL_TOKEN 设置随机值；该文件不会提交到 Git。
+& .\scripts\verify_m3_release.ps1
 & .\scripts\verify_m3_closeout.ps1
 & .\scripts\demo_pilot.ps1
 ```
