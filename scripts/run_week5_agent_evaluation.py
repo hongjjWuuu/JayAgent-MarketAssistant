@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 
 from app.core.security import AuthContext
 from app.repositories.factory import get_repository
@@ -32,15 +33,24 @@ def main() -> None:
         ),
     )
     worker = TaskWorker(repository, f"week5-{args.provider}-{args.split}")
-    for _ in range(200):
+    for _ in range(1200):
         current = repository.get_evaluation_run(run.evaluation_run_id, "tenant_demo")
         if current and current.status == "completed":
             break
         if not worker.run_once():
-            raise RuntimeError("Evaluation task was not available")
+            # A long-running deployment may have another Worker claim the task
+            # between enqueue and this local helper. Poll the durable run instead
+            # of reporting a false failure.
+            time.sleep(0.25)
     completed = repository.get_evaluation_run(run.evaluation_run_id, "tenant_demo")
     if completed is None or completed.status != "completed":
         raise RuntimeError("Week 5 evaluation did not complete")
+    expected_count = 20 if args.split == "live_smoke" else 80
+    actual_count = int(completed.summary.get("case_count") or 0)
+    if actual_count != expected_count:
+        raise RuntimeError(
+            f"Week 5 evaluation expected {expected_count} cases, got {actual_count}"
+        )
     failures = [
         {
             "case_id": item.case_id,

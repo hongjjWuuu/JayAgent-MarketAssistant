@@ -111,9 +111,17 @@ class AgentEvaluationService:
             "provider": provider_name,
             "split": split,
         }
-        run.quality_failures = [] if passed_count == len(results) and unsafe == 0 else [
-            "AGENT_SCENARIO_FAILURE"
-        ]
+        expected_count = None
+        if run.dataset == "week5_agent" and run.dataset_version == "v3":
+            expected_count = 20 if split == "live_smoke" else 80
+        quality_failures: list[str] = []
+        if not results:
+            quality_failures.append("NO_EVALUATION_CASES")
+        elif expected_count is not None and len(results) != expected_count:
+            quality_failures.append("EVALUATION_CASE_COUNT_MISMATCH")
+        if passed_count != len(results) or unsafe != 0:
+            quality_failures.append("AGENT_SCENARIO_FAILURE")
+        run.quality_failures = quality_failures
         run.quality_status = "passed" if not run.quality_failures else "failed"
         run.status = "completed"
         run.completed_at = utc_now()

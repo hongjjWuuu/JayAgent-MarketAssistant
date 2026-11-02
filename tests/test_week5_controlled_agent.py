@@ -7,10 +7,11 @@ from pydantic import ValidationError
 
 from app.agents.orchestrator import MarketOrchestrator
 from app.core.security import AuthContext
-from app.domain.models import CompensationProposal, utc_now
+from app.domain.models import CompensationProposal, EvaluationRun, utc_now
 from app.llm.provider import FakeLlmProvider, RequestUnderstanding
 from app.repositories.memory import InMemoryStore
 from app.schemas.api import ActionPlanCreate, PolicyCreate
+from app.services.agent_evaluation_service import AgentEvaluationService
 from app.services.market_service import MarketAssistantService
 
 
@@ -149,3 +150,24 @@ def test_expired_compensation_proposal_cannot_create_action_plan():
                 idempotency_key="expired-proposal-v1",
             ),
         )
+
+
+def test_agent_evaluation_rejects_an_empty_frozen_dataset():
+    store = InMemoryStore()
+    run = store.save_evaluation_run(
+        EvaluationRun(
+            evaluation_run_id="eval_empty",
+            tenant_id="tenant_demo",
+            dataset="week5_agent",
+            dataset_version="v3",
+            config_snapshot={"provider": "fake", "split": "live_smoke"},
+        )
+    )
+
+    AgentEvaluationService(store).run("tenant_demo", run.evaluation_run_id)
+
+    completed = store.get_evaluation_run(run.evaluation_run_id, "tenant_demo")
+    assert completed is not None
+    assert completed.summary["case_count"] == 0
+    assert completed.quality_status == "failed"
+    assert "NO_EVALUATION_CASES" in completed.quality_failures

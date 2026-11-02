@@ -31,6 +31,13 @@ try {
     } while ((Get-Date) -lt $deadline)
     if ($ready.status -ne "ready") { throw "M3 drill API did not become ready" }
 
+    # Rebuild the frozen policy corpus, formal quality datasets and immutable
+    # bge-m3-v10 profile before any business acceptance test.
+    & (Join-Path $PSScriptRoot "initialize_m3_retrieval.ps1") `
+        -DatabaseUrl $env:DATABASE_URL `
+        -EmbeddingBaseUrl $env:EMBEDDING_BASE_URL
+    & $python -m scripts.seed_week5_scenarios_v3
+
     & $python -m ruff check app simulator tests scripts
     & $python -m pytest -q tests --ignore=tests/integration
     $env:RUN_POSTGRES_TESTS = "1"

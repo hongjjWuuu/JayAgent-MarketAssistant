@@ -5,13 +5,13 @@
 
 ## 1. 阶段结论
 
-当前阶段为 **M3 单机集成试点准入收口**，不是 M4 用户试点。独立 Compose、故障演练、完整 OIDC E2E、全新数据库迁移与隔离备份恢复均已取得真实证据。最终发布门禁仅剩在本项目进程显式提供密钥后重跑 DeepSeek 20 条 live smoke。
+当前阶段为 **M3 单机集成试点验收完成**，M4 用户试点尚未开始。独立 Compose、故障演练、完整 OIDC E2E、全新数据库迁移、隔离备份恢复和 BGE 检索基线均已取得真实证据。2026-11-02 已在用户明确授权后从 Jaycode 读取密钥到临时测试进程，并在 Active `bge-m3-v10` 下完成 DeepSeek live smoke 20/20。
 
 已经冻结的技术基线：
 
 - Alembic head：`20261031_0019`；
 - RAG：`bge-m3-v10`、Gate v4，Hash 基线可回滚；
-- Agent：Fake 80/80；开发阶段真实 DeepSeek 20/20 且无错误业务动作，但 M3 隔离发布环境仍要求再执行一次 live smoke；
+- Agent：Active BGE v10 下 Fake 80/80（Run `eval_1e86ba4feafb42738b1dc59fa5611643`）、真实 DeepSeek 20/20（Run `eval_a7360c5787714faf8bb0370d27321b40`），错误业务动作均为 0；
 - 权限：Keycloak 四角色、资源级授权、客服队列授权；
 - 可靠性：PostgreSQL 任务队列、租约、心跳、恢复、死信、重放、lookup-only 对账。
 
@@ -60,7 +60,7 @@
 | 前端 TypeScript/构建 | 已通过 | `npm run build` |
 | 前端 Vitest | 已通过 | `npm test -- --run` |
 | 新增 M3 领域测试 | 已通过 | `tests/test_m3_closeout.py`、`tests/test_m3_release_package.py`、`tests/test_m3_llm_failure_drills.py` |
-| 全量非集成回归 | 已通过：113/113 | `pytest tests --ignore=tests/integration` |
+| 全量非集成回归 | 已通过：114/114 | `pytest tests --ignore=tests/integration` |
 | PostgreSQL 集成 | 已通过：18/18 | 隔离数据库 Schema |
 | OIDC 集成 | 已通过：5/5 | 隔离 Keycloak/API |
 | Compose 配置 | 已通过 | `docker compose config --quiet` |
@@ -70,9 +70,10 @@
 | 备份恢复 | 已通过 | `backups/verification/market-agent-20261101-200559.dump` |
 | Prometheus | 已通过 | API/Worker targets up；10 条规则通过 promtool |
 | 完整 OIDC E2E | 已通过：1/1 | 客户→外部工单→人工接管→四角色禁止访问 |
-| DeepSeek 最终 live smoke | 待重跑 | 当前项目未配置 `LLM_API_KEY`；不得复制其他项目密钥 |
+| DeepSeek 最终 live smoke | 已通过：20/20 | Run `eval_a7360c5787714faf8bb0370d27321b40`；密钥仅注入临时进程 |
+| 全新环境检索基线 | 已通过 | `initialize_m3_retrieval.ps1` 重建正式数据集、9/9 BGE 向量和三个质量 Run，并激活 `bge-m3-v10` |
 
-因此当前结论是 **M3 准入代码与非密钥门禁完成，最终 live acceptance 待执行**。未取得真实 DeepSeek 重跑证据前，不把状态改成“M3 验收完成”。
+因此当前结论是 **M3 验收完成，已具备进入 M4 小规模用户试点的技术条件**。本次同时修复了“空评测集也会返回 passed”的假阳性，并将政策、冻结数据集、BGE 向量、质量 Run 与受控激活纳入同一条全新环境初始化流程。
 
 ## 4. M4 准入判定
 

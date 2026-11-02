@@ -20,12 +20,21 @@ drills = json.loads(drill_path.read_text(encoding="utf-8-sig")) if drill_path.ex
 oidc_result = os.getenv("M3_OIDC_E2E_RESULT", "not-run")
 fake_result = os.getenv("M3_FAKE_RESULT", "80/80-existing-baseline")
 deepseek_result = os.getenv("M3_DEEPSEEK_RESULT", "not-run")
+fake_run_id = os.getenv("M3_FAKE_RUN_ID", "")
+deepseek_run_id = os.getenv("M3_DEEPSEEK_RUN_ID", "")
 backup_evidence = sorted((ROOT / "backups" / "verification").glob("*.dump"))
 revision = command(
     "docker", "compose", "--env-file", ".env.m3-drill", "-p",
     "jayagent-marketassistant-drill", "exec", "-T", "postgres", "psql", "-U",
     "market_agent", "-d", "market_agent", "-Atc", "select version_num from alembic_version",
 )
+active_profile = command(
+    "docker", "compose", "--env-file", ".env.m3-drill", "-p",
+    "jayagent-marketassistant-drill", "exec", "-T", "postgres", "psql", "-U",
+    "market_agent", "-d", "market_agent", "-Atc",
+    "select id from retrieval_profile where tenant_id='tenant_demo' and status='active' limit 1",
+)
+retrieval_baseline = active_profile or "hash-v1-fallback"
 image_lines = command(
     "docker", "compose", "--env-file", ".env.m3-drill", "-p",
     "jayagent-marketassistant-drill", "images", "--format", "json",
@@ -45,6 +54,7 @@ gates_complete = (
     and oidc_result == "passed"
     and fake_result == "80/80"
     and deepseek_result == "20/20"
+    and retrieval_baseline == "bge-m3-v10"
     and bool(backup_evidence)
 )
 report = {
@@ -55,13 +65,16 @@ report = {
     "compose_project": "jayagent-marketassistant-drill",
     "images": images,
     "test_baselines": {
-        "backend_non_integration": "113/113",
+        "backend_non_integration": "114/114",
         "postgres_integration": "18/18",
         "oidc_integration": "5/5",
         "frontend_vitest": "2/2",
         "oidc_business_e2e": oidc_result,
         "fake_provider": fake_result,
+        "fake_provider_run_id": fake_run_id,
         "deepseek_smoke": deepseek_result,
+        "deepseek_smoke_run_id": deepseek_run_id,
+        "retrieval_baseline": retrieval_baseline,
         "backup_restore": "passed" if backup_evidence else "not-run",
     },
     "failure_drills": drills,
@@ -77,6 +90,7 @@ report = {
             "oidc_business_e2e": oidc_result == "passed",
             "fake_provider_80": fake_result == "80/80",
             "deepseek_live_smoke_20": deepseek_result == "20/20",
+            "retrieval_profile_bge_m3_v10": retrieval_baseline == "bge-m3-v10",
             "backup_restore": bool(backup_evidence),
         }.items()
         if not passed

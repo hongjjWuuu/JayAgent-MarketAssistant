@@ -24,6 +24,8 @@ if ($RunLiveDeepSeekSmoke) {
     if (-not $env:EMBEDDING_DIMENSION) { $env:EMBEDDING_DIMENSION = "1024" }
     docker compose up -d postgres redis embedding migrate
     if ($LASTEXITCODE -ne 0) { throw "Live smoke dependencies failed" }
+    & $python -m scripts.seed_week5_scenarios_v3
+    if ($LASTEXITCODE -ne 0) { throw "Week 5 live smoke dataset seed failed" }
     & $python -m scripts.run_week5_agent_evaluation --provider configured --split live_smoke --dataset-version v3
     if ($LASTEXITCODE -ne 0) { throw "Live DeepSeek end-to-end smoke failed" }
 }
