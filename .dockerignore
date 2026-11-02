@@ -5,3 +5,6 @@ __pycache__
 web/node_modules
 web/dist
 .git
+.env
+.env.m3-drill
+.env.m4-pilot

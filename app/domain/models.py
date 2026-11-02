@@ -382,3 +382,81 @@ class AgentRun(BaseModel):
     input_redacted: dict[str, Any] = Field(default_factory=dict)
     output_redacted: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class PilotRelease(BaseModel):
+    pilot_id: str
+    tenant_id: str
+    version: str
+    status: str = "draft"
+    git_sha: str
+    image_digests: dict[str, str] = Field(default_factory=dict)
+    llm_model: str
+    prompt_version: str
+    graph_version: str
+    retrieval_profile_id: str
+    policy_corpus_hash: str
+    dataset_version: str = "m4_pilot/v1"
+    dataset_hash: str
+    connector_mode: str = "http"
+    alembic_revision: str
+    input_cost_per_million: float = Field(default=0.0, ge=0)
+    output_cost_per_million: float = Field(default=0.0, ge=0)
+    config_hash: str = ""
+    created_by: str
+    created_at: datetime = Field(default_factory=utc_now)
+    frozen_at: datetime | None = None
+    closed_at: datetime | None = None
+
+
+class PilotParticipant(BaseModel):
+    participant_id: str
+    tenant_id: str
+    pilot_id: str
+    participant_code: str
+    role: str
+    subject: str
+    active: bool = True
+    consented_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class PilotTaskAssignment(BaseModel):
+    assignment_id: str
+    tenant_id: str
+    pilot_id: str
+    participant_code: str
+    scenario: str
+    expected_outcome: str
+    status: str = "assigned"
+    conversation_id: str | None = None
+    handoff_id: str | None = None
+    ticket_id: str | None = None
+    failure_category: str | None = None
+    notes_redacted: str = ""
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class PilotFeedback(BaseModel):
+    feedback_id: str
+    tenant_id: str
+    pilot_id: str
+    assignment_id: str | None = None
+    conversation_id: str
+    participant_code: str
+    completed: bool
+    rating: int = Field(ge=1, le=5)
+    confusion_tags: list[str] = Field(default_factory=list)
+    comment_redacted: str = ""
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class PilotMetricSnapshot(BaseModel):
+    snapshot_id: str
+    tenant_id: str
+    pilot_id: str
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    safety: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)

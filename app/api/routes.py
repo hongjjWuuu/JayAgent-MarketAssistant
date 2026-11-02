@@ -21,6 +21,8 @@ from app.schemas.api import (
     HandoffResolve,
     HandoffTransfer,
     MessageCreate,
+    PilotCreate,
+    PilotFeedbackCreate,
     PolicyCreate,
     PolicyUpdate,
     ReconciliationResolve,
@@ -282,6 +284,64 @@ def get_agent_run(run_id: str):
 @router.get("/admin/pilot-metrics")
 def pilot_metrics():
     return service.pilot_metrics(current_auth())
+
+
+@router.post("/admin/pilots", status_code=201)
+def create_pilot(data: PilotCreate):
+    return service.create_pilot(current_auth(), data)
+
+
+@router.get("/admin/pilots/{pilot_id}")
+def get_pilot(pilot_id: str):
+    return service.get_pilot(current_auth(), pilot_id)
+
+
+@router.post("/admin/pilots/{pilot_id}/freeze")
+def freeze_pilot(pilot_id: str):
+    return service.freeze_pilot(current_auth(), pilot_id)
+
+
+@router.post("/admin/pilots/{pilot_id}/close")
+def close_pilot(pilot_id: str):
+    return service.close_pilot(current_auth(), pilot_id)
+
+
+@router.get("/admin/pilots/{pilot_id}/tasks")
+def list_pilot_tasks(pilot_id: str):
+    return service.list_pilot_tasks(current_auth(), pilot_id)
+
+
+@router.get("/admin/pilots/{pilot_id}/metrics")
+def pilot_release_metrics(
+    pilot_id: str,
+    scenario: str | None = Query(default=None),
+    participant_code: str | None = Query(default=None),
+):
+    return service.pilot_release_metrics(
+        current_auth(), pilot_id, scenario, participant_code
+    )
+
+
+@router.post("/admin/pilots/{pilot_id}/snapshots", status_code=201)
+def snapshot_pilot_metrics(pilot_id: str):
+    return service.snapshot_pilot_metrics(current_auth(), pilot_id)
+
+
+@router.get("/admin/pilots/{pilot_id}/report")
+def pilot_report(pilot_id: str):
+    return service.pilot_report(current_auth(), pilot_id)
+
+
+@router.post("/conversations/{conversation_id}/pilot-feedback", status_code=201)
+def submit_pilot_feedback(
+    conversation_id: str, data: PilotFeedbackCreate
+):
+    return service.submit_pilot_feedback(current_auth(), conversation_id, data)
+
+
+@router.get("/pilot-tasks")
+def list_my_pilot_tasks():
+    return service.list_my_pilot_tasks(current_auth())
 
 
 @router.post("/admin/evaluation-cases/import", status_code=201)

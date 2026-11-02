@@ -21,6 +21,11 @@ from app.domain.models import (
     Handoff,
     LlmTrace,
     Order,
+    PilotFeedback,
+    PilotMetricSnapshot,
+    PilotParticipant,
+    PilotRelease,
+    PilotTaskAssignment,
     PolicyVersion,
     RetrievalProfile,
     RetrievalSnapshot,
@@ -54,6 +59,11 @@ class InMemoryStore:
         self.retrieval_profiles: dict[str, RetrievalProfile] = {}
         self.llm_traces: dict[str, LlmTrace] = {}
         self.agent_runs: dict[str, AgentRun] = {}
+        self.pilot_releases: dict[str, PilotRelease] = {}
+        self.pilot_participants: dict[str, PilotParticipant] = {}
+        self.pilot_tasks: dict[str, PilotTaskAssignment] = {}
+        self.pilot_feedback: dict[str, PilotFeedback] = {}
+        self.pilot_metric_snapshots: dict[str, PilotMetricSnapshot] = {}
         self.retrieval_snapshots: dict[str, RetrievalSnapshot] = {}
         self.evaluation_cases: dict[str, EvaluationCase] = {}
         self.evaluation_datasets: dict[tuple[str, str, str], EvaluationDataset] = {}
@@ -84,6 +94,11 @@ class InMemoryStore:
             self.retrieval_profiles.clear()
             self.llm_traces.clear()
             self.agent_runs.clear()
+            self.pilot_releases.clear()
+            self.pilot_participants.clear()
+            self.pilot_tasks.clear()
+            self.pilot_feedback.clear()
+            self.pilot_metric_snapshots.clear()
             self.retrieval_snapshots.clear()
             self.evaluation_cases.clear()
             self.evaluation_datasets.clear()
@@ -1076,6 +1091,147 @@ class InMemoryStore:
             [value for value in self.agent_runs.values() if value.tenant_id == tenant_id],
             key=lambda value: value.created_at,
             reverse=True,
+        )
+
+    def create_pilot(
+        self,
+        release: PilotRelease,
+        participants: list[PilotParticipant],
+        tasks: list[PilotTaskAssignment],
+    ) -> PilotRelease:
+        with self._lock:
+            if any(
+                value.tenant_id == release.tenant_id and value.version == release.version
+                for value in self.pilot_releases.values()
+            ):
+                raise ValueError("Pilot version already exists")
+            self.pilot_releases[release.pilot_id] = release
+            self.pilot_participants.update(
+                {value.participant_id: value for value in participants}
+            )
+            self.pilot_tasks.update({value.assignment_id: value for value in tasks})
+            return release
+
+    def get_pilot(self, pilot_id: str, tenant_id: str) -> PilotRelease | None:
+        value = self.pilot_releases.get(pilot_id)
+        return value if value and value.tenant_id == tenant_id else None
+
+    def list_pilot_participants(
+        self, pilot_id: str, tenant_id: str
+    ) -> list[PilotParticipant]:
+        return sorted(
+            [
+                value
+                for value in self.pilot_participants.values()
+                if value.tenant_id == tenant_id and value.pilot_id == pilot_id
+            ],
+            key=lambda value: value.participant_code,
+        )
+
+    def find_active_pilot_participant(
+        self, tenant_id: str, subject: str
+    ) -> PilotParticipant | None:
+        return next(
+            (
+                value
+                for value in self.pilot_participants.values()
+                if value.tenant_id == tenant_id
+                and value.subject == subject
+                and value.active
+                and self.pilot_releases[value.pilot_id].status == "frozen"
+            ),
+            None,
+        )
+
+    def list_pilot_tasks(
+        self, pilot_id: str, tenant_id: str
+    ) -> list[PilotTaskAssignment]:
+        return sorted(
+            [
+                value
+                for value in self.pilot_tasks.values()
+                if value.tenant_id == tenant_id and value.pilot_id == pilot_id
+            ],
+            key=lambda value: (value.participant_code, value.created_at),
+        )
+
+    def freeze_pilot(self, pilot_id: str, tenant_id: str) -> PilotRelease | None:
+        with self._lock:
+            value = self.get_pilot(pilot_id, tenant_id)
+            if value is None:
+                return None
+            if value.status != "draft":
+                raise ValueError("Only draft pilots can be frozen")
+            value.status = "frozen"
+            value.frozen_at = utc_now()
+            return value
+
+    def close_pilot(self, pilot_id: str, tenant_id: str) -> PilotRelease | None:
+        with self._lock:
+            value = self.get_pilot(pilot_id, tenant_id)
+            if value is None:
+                return None
+            if value.status != "frozen":
+                raise ValueError("Only frozen pilots can be closed")
+            value.status = "closed"
+            value.closed_at = utc_now()
+            return value
+
+    def record_pilot_feedback(self, feedback: PilotFeedback) -> PilotFeedback:
+        with self._lock:
+            for value in self.pilot_feedback.values():
+                if (
+                    value.tenant_id == feedback.tenant_id
+                    and value.pilot_id == feedback.pilot_id
+                    and value.conversation_id == feedback.conversation_id
+                    and value.participant_code == feedback.participant_code
+                ):
+                    raise ValueError("Feedback already exists for this conversation")
+            if feedback.assignment_id:
+                task = self.pilot_tasks.get(feedback.assignment_id)
+                if (
+                    task is None
+                    or task.tenant_id != feedback.tenant_id
+                    or task.pilot_id != feedback.pilot_id
+                    or task.participant_code != feedback.participant_code
+                ):
+                    raise ValueError("Pilot task not found")
+                task.conversation_id = feedback.conversation_id
+                task.status = "completed" if feedback.completed else "failed"
+                task.started_at = task.started_at or feedback.created_at
+                task.completed_at = feedback.created_at
+                task.notes_redacted = feedback.comment_redacted
+            self.pilot_feedback[feedback.feedback_id] = feedback
+            return feedback
+
+    def list_pilot_feedback(
+        self, pilot_id: str, tenant_id: str
+    ) -> list[PilotFeedback]:
+        return sorted(
+            [
+                value
+                for value in self.pilot_feedback.values()
+                if value.tenant_id == tenant_id and value.pilot_id == pilot_id
+            ],
+            key=lambda value: value.created_at,
+        )
+
+    def save_pilot_metric_snapshot(
+        self, snapshot: PilotMetricSnapshot
+    ) -> PilotMetricSnapshot:
+        self.pilot_metric_snapshots[snapshot.snapshot_id] = snapshot
+        return snapshot
+
+    def list_pilot_metric_snapshots(
+        self, pilot_id: str, tenant_id: str
+    ) -> list[PilotMetricSnapshot]:
+        return sorted(
+            [
+                value
+                for value in self.pilot_metric_snapshots.values()
+                if value.tenant_id == tenant_id and value.pilot_id == pilot_id
+            ],
+            key=lambda value: value.created_at,
         )
 
 

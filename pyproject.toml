@@ -1,6 +1,6 @@
 [project]
 name = "jayagent-market-assistant"
-version = "0.6.0rc1"
+version = "0.7.0rc1"
 description = "A governed multi-tenant market-facing customer service agent."
 requires-python = ">=3.11"
 dependencies = [
@@ -17,12 +17,15 @@ dependencies = [
     "httpx>=0.28.0",
     "prometheus-client>=0.21.0",
     "langgraph>=0.2.60",
+    "msgpack>=1.2.3",
+    "urllib3>=2.8.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2.0",
     "pytest-cov>=6.0.0",
+    "pip-audit>=2.7.0",
     "ruff>=0.6.0",
 ]
 

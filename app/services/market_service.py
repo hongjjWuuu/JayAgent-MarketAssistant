@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from datetime import timedelta
+from statistics import median
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -23,6 +25,11 @@ from app.domain.models import (
     EvaluationRun,
     Handoff,
     Message,
+    PilotFeedback,
+    PilotMetricSnapshot,
+    PilotParticipant,
+    PilotRelease,
+    PilotTaskAssignment,
     PolicyVersion,
     RetrievalProfile,
     RuntimeTask,
@@ -36,6 +43,8 @@ from app.schemas.api import (
     EvaluationCaseImport,
     EvaluationExpected,
     EvaluationRunRequest,
+    PilotCreate,
+    PilotFeedbackCreate,
     PolicyCreate,
     PolicyUpdate,
     ReconciliationResolve,
@@ -1207,15 +1216,57 @@ class MarketAssistantService:
             raise HTTPException(status_code=404, detail="Agent run not found")
         return run
 
-    def pilot_metrics(self, auth: AuthContext) -> dict:
+    def pilot_metrics(
+        self, auth: AuthContext, conversation_ids: set[str] | None = None
+    ) -> dict:
         require_roles(auth, "tenant_admin")
+        if conversation_ids is not None and not conversation_ids:
+            return {
+                "conversation_count": 0,
+                "resolved_count": 0,
+                "self_service_resolution_rate": 0.0,
+                "handoff_rate": 0.0,
+                "first_contact_resolution_rate": 0.0,
+                "ticket_count": 0,
+                "open_ticket_count": 0,
+                "average_first_response_seconds": 0.0,
+                "average_resolution_seconds": 0.0,
+                "agent_run_count": 0,
+                "agent_p95_latency_ms": 0,
+                "order_query_p95_latency_ms": 0,
+                "tool_failure_rate": 0.0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "estimated_cost": 0.0,
+                "unsafe_write_count": 0,
+                "automatic_high_risk_action_count": 0,
+                "duplicate_execution_count": 0,
+                "dead_letter_count": 0,
+            }
         sql_aggregate = getattr(self.repository, "pilot_metrics", None)
         if callable(sql_aggregate):
-            return sql_aggregate(auth.tenant_id)
-        conversations = self.repository.list_conversations(auth.tenant_id)
-        handoffs = self.repository.list_handoffs(auth.tenant_id)
-        tickets = self.repository.list_tickets(auth.tenant_id)
-        runs = self.repository.list_agent_runs(auth.tenant_id)
+            return sql_aggregate(auth.tenant_id, conversation_ids)
+        conversations = [
+            item
+            for item in self.repository.list_conversations(auth.tenant_id)
+            if conversation_ids is None or item.conversation_id in conversation_ids
+        ]
+        selected_ids = {item.conversation_id for item in conversations}
+        handoffs = [
+            item
+            for item in self.repository.list_handoffs(auth.tenant_id)
+            if conversation_ids is None or item.conversation_id in selected_ids
+        ]
+        tickets = [
+            item
+            for item in self.repository.list_tickets(auth.tenant_id)
+            if conversation_ids is None or item.conversation_id in selected_ids
+        ]
+        runs = [
+            item
+            for item in self.repository.list_agent_runs(auth.tenant_id)
+            if conversation_ids is None or item.conversation_id in selected_ids
+        ]
         handed_conversations = {item.conversation_id for item in handoffs}
         resolved = [
             item
@@ -1253,6 +1304,19 @@ class MarketAssistantService:
             return sum(values) / len(values) if values else 0.0
 
         p95 = latencies[max(0, math.ceil(len(latencies) * 0.95) - 1)] if latencies else 0
+        selected_plans = [
+            item
+            for item in getattr(self.repository, "action_plans", {}).values()
+            if item.tenant_id == auth.tenant_id
+            and (conversation_ids is None or item.conversation_id in selected_ids)
+        ]
+        selected_plan_ids = {item.action_plan_id for item in selected_plans}
+        executions = [
+            item
+            for item in getattr(self.repository, "executions_by_key", {}).values()
+            if item.tenant_id == auth.tenant_id and item.action_plan_id in selected_plan_ids
+        ]
+        unsafe_statuses = {"draft", "validated", "approval_required"}
         return {
             "conversation_count": len(conversations),
             "resolved_count": len(resolved),
@@ -1267,12 +1331,424 @@ class MarketAssistantService:
             "average_resolution_seconds": average(resolution_seconds),
             "agent_run_count": len(runs),
             "agent_p95_latency_ms": p95,
+            "order_query_p95_latency_ms": 0,
             "tool_failure_rate": ratio(sum(bool(item.error_code) for item in runs), len(runs)),
             "input_tokens": sum(item.input_tokens for item in runs),
             "output_tokens": sum(item.output_tokens for item in runs),
             "estimated_cost": sum(item.estimated_cost for item in runs),
-            "unsafe_write_count": 0,
+            "unsafe_write_count": sum(
+                str(plan.status.value if hasattr(plan.status, "value") else plan.status)
+                in unsafe_statuses
+                for plan in selected_plans
+                if any(run.action_plan_id == plan.action_plan_id for run in executions)
+            ),
+            "automatic_high_risk_action_count": 0,
+            "duplicate_execution_count": len(executions)
+            - len({item.idempotency_key for item in executions}),
+            "dead_letter_count": sum(
+                item.tenant_id == auth.tenant_id
+                and item.status == RuntimeTaskStatus.DEAD_LETTER
+                and (conversation_ids is None or item.conversation_id in selected_ids)
+                for item in getattr(self.repository, "runtime_tasks", {}).values()
+            ),
         }
+
+    @staticmethod
+    def _redact_pilot_text(value: str) -> str:
+        value = re.sub(r"(?<!\d)1[3-9]\d{9}(?!\d)", "[PHONE]", value)
+        value = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[EMAIL]", value)
+        value = re.sub(
+            r"(?i)\b(?:bearer\s+)?(?:sk-|gh[pousr]_|github_pat_)[A-Za-z0-9_-]{12,}",
+            "[TOKEN]",
+            value,
+        )
+        value = re.sub(r"(?i)(?:地址|住址)[:：]?[^，。\n]{4,80}", "地址：[ADDRESS]", value)
+        return value
+
+    @staticmethod
+    def _pilot_config_hash(release: PilotRelease) -> str:
+        payload = release.model_dump(
+            exclude={"pilot_id", "status", "config_hash", "created_at", "frozen_at", "closed_at"},
+            mode="json",
+        )
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+        ).hexdigest()
+
+    def create_pilot(self, auth: AuthContext, data: PilotCreate):
+        require_roles(auth, "tenant_admin")
+        codes = [item.participant_code for item in data.participants]
+        subjects = [item.subject for item in data.participants]
+        if len(codes) != len(set(codes)) or len(subjects) != len(set(subjects)):
+            raise HTTPException(status_code=409, detail="Pilot participants must be unique")
+        role_counts = {
+            role: sum(item.role == role for item in data.participants)
+            for role in ("customer", "agent", "tenant_admin")
+        }
+        if not (3 <= role_counts["customer"] <= 5):
+            raise HTTPException(status_code=422, detail="Pilot requires 3 to 5 customers")
+        if not (1 <= role_counts["agent"] <= 2) or role_counts["tenant_admin"] != 1:
+            raise HTTPException(
+                status_code=422, detail="Pilot requires 1 to 2 agents and one tenant admin"
+            )
+        for item in data.participants:
+            if self.repository.member_role(auth.tenant_id, item.subject) != item.role:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Participant {item.participant_code} is not an active {item.role}",
+                )
+        customer_codes = {
+            item.participant_code for item in data.participants if item.role == "customer"
+        }
+        if any(item.participant_code not in customer_codes for item in data.tasks):
+            raise HTTPException(status_code=422, detail="Tasks may only be assigned to customers")
+        pilot_id = f"pilot_{uuid4().hex}"
+        release = PilotRelease(
+            pilot_id=pilot_id,
+            tenant_id=auth.tenant_id,
+            version=data.version,
+            git_sha=data.git_sha,
+            image_digests=data.image_digests,
+            llm_model=data.llm_model,
+            prompt_version=data.prompt_version,
+            graph_version=data.graph_version,
+            retrieval_profile_id=data.retrieval_profile_id,
+            policy_corpus_hash=data.policy_corpus_hash,
+            dataset_version=data.dataset_version,
+            dataset_hash=data.dataset_hash,
+            connector_mode=data.connector_mode,
+            alembic_revision=data.alembic_revision,
+            input_cost_per_million=data.input_cost_per_million,
+            output_cost_per_million=data.output_cost_per_million,
+            created_by=auth.subject,
+        )
+        release.config_hash = self._pilot_config_hash(release)
+        participants = [
+            PilotParticipant(
+                participant_id=f"participant_{uuid4().hex}",
+                tenant_id=auth.tenant_id,
+                pilot_id=pilot_id,
+                participant_code=item.participant_code,
+                role=item.role,
+                subject=item.subject,
+                consented_at=item.consented_at,
+            )
+            for item in data.participants
+        ]
+        tasks = [
+            PilotTaskAssignment(
+                assignment_id=f"pilot_task_{uuid4().hex}",
+                tenant_id=auth.tenant_id,
+                pilot_id=pilot_id,
+                participant_code=item.participant_code,
+                scenario=item.scenario,
+                expected_outcome=item.expected_outcome,
+            )
+            for item in data.tasks
+        ]
+        try:
+            self.repository.create_pilot(release, participants, tasks)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        self._audit(auth, "pilot.create", "pilot", pilot_id, {"version": data.version})
+        return self.get_pilot(auth, pilot_id)
+
+    def get_pilot(self, auth: AuthContext, pilot_id: str):
+        require_roles(auth, "tenant_admin")
+        release = self.repository.get_pilot(pilot_id, auth.tenant_id)
+        if release is None:
+            raise HTTPException(status_code=404, detail="Pilot not found")
+        return {
+            "release": release,
+            "participants": self.repository.list_pilot_participants(
+                pilot_id, auth.tenant_id
+            ),
+            "tasks": self.repository.list_pilot_tasks(pilot_id, auth.tenant_id),
+        }
+
+    def _validate_pilot_freeze(self, auth: AuthContext, release: PilotRelease) -> None:
+        participants = self.repository.list_pilot_participants(
+            release.pilot_id, auth.tenant_id
+        )
+        tasks = self.repository.list_pilot_tasks(release.pilot_id, auth.tenant_id)
+        customer_codes = {
+            item.participant_code for item in participants if item.role == "customer"
+        }
+        if any(item.consented_at is None for item in participants):
+            raise HTTPException(status_code=409, detail="Every participant must consent")
+        required = {"order", "shipment", "policy", "ticket", "handoff"}
+        for code in customer_codes:
+            scenarios = {item.scenario for item in tasks if item.participant_code == code}
+            if not required.issubset(scenarios):
+                raise HTTPException(
+                    status_code=409, detail=f"Participant {code} is missing required tasks"
+                )
+        profile = self.repository.get_retrieval_profile(
+            release.retrieval_profile_id, auth.tenant_id
+        )
+        if profile is None or profile.status != "active":
+            raise HTTPException(status_code=409, detail="Retrieval profile is not active")
+        if self._policy_corpus_hash(auth.tenant_id) != release.policy_corpus_hash:
+            raise HTTPException(status_code=409, detail="Policy corpus changed after pilot draft")
+        if not release.image_digests or any(
+            not value.startswith("sha256:") for value in release.image_digests.values()
+        ):
+            raise HTTPException(status_code=409, detail="Image digests are incomplete")
+        if release.input_cost_per_million <= 0 or release.output_cost_per_million <= 0:
+            raise HTTPException(status_code=409, detail="Actual LLM prices must be configured")
+        if release.dataset_version != "m4_pilot/v1":
+            raise HTTPException(status_code=409, detail="Pilot dataset must be m4_pilot/v1")
+        if release.config_hash != self._pilot_config_hash(release):
+            raise HTTPException(status_code=409, detail="Pilot configuration hash mismatch")
+
+    def freeze_pilot(self, auth: AuthContext, pilot_id: str):
+        require_roles(auth, "tenant_admin")
+        release = self.repository.get_pilot(pilot_id, auth.tenant_id)
+        if release is None:
+            raise HTTPException(status_code=404, detail="Pilot not found")
+        self._validate_pilot_freeze(auth, release)
+        try:
+            release = self.repository.freeze_pilot(pilot_id, auth.tenant_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        self._audit(auth, "pilot.freeze", "pilot", pilot_id)
+        return release
+
+    def list_pilot_tasks(self, auth: AuthContext, pilot_id: str):
+        require_roles(auth, "tenant_admin")
+        if self.repository.get_pilot(pilot_id, auth.tenant_id) is None:
+            raise HTTPException(status_code=404, detail="Pilot not found")
+        return self.repository.list_pilot_tasks(pilot_id, auth.tenant_id)
+
+    def list_my_pilot_tasks(self, auth: AuthContext):
+        self.authorization.require_customer(auth)
+        participant = self.repository.find_active_pilot_participant(
+            auth.tenant_id, auth.subject
+        )
+        if participant is None or participant.role != "customer":
+            return []
+        return [
+            item
+            for item in self.repository.list_pilot_tasks(
+                participant.pilot_id, auth.tenant_id
+            )
+            if item.participant_code == participant.participant_code
+        ]
+
+    def submit_pilot_feedback(
+        self,
+        auth: AuthContext,
+        conversation_id: str,
+        data: PilotFeedbackCreate,
+    ):
+        customer_id = self.authorization.require_customer(auth)
+        conversation = self.get_conversation(auth, conversation_id)
+        if conversation.customer_id != customer_id:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        release = self.repository.get_pilot(data.pilot_id, auth.tenant_id)
+        if release is None or release.status != "frozen":
+            raise HTTPException(status_code=409, detail="Pilot is not accepting feedback")
+        participant = next(
+            (
+                item
+                for item in self.repository.list_pilot_participants(
+                    data.pilot_id, auth.tenant_id
+                )
+                if item.subject == auth.subject and item.role == "customer" and item.active
+            ),
+            None,
+        )
+        if participant is None:
+            raise HTTPException(status_code=404, detail="Pilot participant not found")
+        allowed_tags = {
+            "navigation",
+            "citation",
+            "confirmation",
+            "status",
+            "handoff",
+            "error",
+            "repeated_core_question",
+            "other",
+        }
+        if any(tag not in allowed_tags for tag in data.confusion_tags):
+            raise HTTPException(status_code=422, detail="Unknown confusion tag")
+        feedback = PilotFeedback(
+            feedback_id=f"pilot_feedback_{uuid4().hex}",
+            tenant_id=auth.tenant_id,
+            pilot_id=data.pilot_id,
+            assignment_id=data.assignment_id,
+            conversation_id=conversation_id,
+            participant_code=participant.participant_code,
+            completed=data.completed,
+            rating=data.rating,
+            confusion_tags=data.confusion_tags,
+            comment_redacted=self._redact_pilot_text(data.comment),
+        )
+        try:
+            result = self.repository.record_pilot_feedback(feedback)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        self._audit(auth, "pilot.feedback", "pilot", data.pilot_id)
+        return result
+
+    def pilot_release_metrics(
+        self,
+        auth: AuthContext,
+        pilot_id: str,
+        scenario: str | None = None,
+        participant_code: str | None = None,
+    ) -> dict:
+        require_roles(auth, "tenant_admin")
+        release = self.repository.get_pilot(pilot_id, auth.tenant_id)
+        if release is None:
+            raise HTTPException(status_code=404, detail="Pilot not found")
+        tasks = self.repository.list_pilot_tasks(pilot_id, auth.tenant_id)
+        feedback = self.repository.list_pilot_feedback(pilot_id, auth.tenant_id)
+        if scenario:
+            task_ids = {item.assignment_id for item in tasks if item.scenario == scenario}
+            tasks = [item for item in tasks if item.assignment_id in task_ids]
+            feedback = [item for item in feedback if item.assignment_id in task_ids]
+        if participant_code:
+            tasks = [item for item in tasks if item.participant_code == participant_code]
+            feedback = [
+                item for item in feedback if item.participant_code == participant_code
+            ]
+        completed = sum(item.status == "completed" for item in tasks)
+        failed = [item for item in tasks if item.status in {"failed", "abandoned"}]
+        ratings = [item.rating for item in feedback]
+        conversations = {
+            item.conversation_id for item in tasks if item.conversation_id is not None
+        }
+        base = self.pilot_metrics(auth, conversations)
+        handoffs = [
+            item
+            for item in self.repository.list_handoffs(auth.tenant_id)
+            if not conversations or item.conversation_id in conversations
+        ]
+        complete_context = sum(
+            bool(item.context_snapshot.get("customer_id"))
+            and bool(item.context_snapshot.get("summary"))
+            and bool(item.context_snapshot.get("reason"))
+            and bool(item.context_snapshot.get("risk"))
+            for item in handoffs
+        )
+        first_responses = []
+        for item in handoffs:
+            timestamp = item.context_snapshot.get("first_response_at")
+            if timestamp:
+                first_responses.append(
+                    max(
+                        0.0,
+                        (
+                            type(item.created_at).fromisoformat(timestamp)
+                            - item.created_at
+                        ).total_seconds(),
+                    )
+                )
+        ratio = lambda numerator, denominator: numerator / denominator if denominator else 0.0
+        metrics = {
+            **base,
+            "pilot_id": pilot_id,
+            "release_status": release.status,
+            "assignment_count": len(tasks),
+            "completed_assignment_count": completed,
+            "task_completion_rate": ratio(completed, len(tasks)),
+            "average_satisfaction": sum(ratings) / len(ratings) if ratings else 0.0,
+            "feedback_count": len(feedback),
+            "handoff_context_completeness_rate": ratio(complete_context, len(handoffs)),
+            "repeated_core_question_rate": ratio(
+                sum("repeated_core_question" in item.confusion_tags for item in feedback),
+                len(feedback),
+            ),
+            "median_first_response_seconds": median(first_responses) if first_responses else 0.0,
+            "unclassified_failure_count": sum(
+                not item.failure_category for item in failed
+            ),
+        }
+        hard_gates = {
+            "unsafe_write_zero": metrics["unsafe_write_count"] == 0,
+            "automatic_high_risk_action_zero": (
+                metrics["automatic_high_risk_action_count"] == 0
+            ),
+            "duplicate_execution_zero": metrics["duplicate_execution_count"] == 0,
+            "lost_task_zero": metrics["dead_letter_count"] == 0,
+            "permission_incident_zero": not any(
+                item.failure_category == "PERMISSION" for item in failed
+            ),
+            "agent_p95_below_8s": metrics["agent_p95_latency_ms"] < 8000,
+            "order_query_p95_below_1s": metrics["order_query_p95_latency_ms"] < 1000,
+            "minimum_50_conversations": metrics["conversation_count"] >= 50,
+        }
+        product_gates = {
+            "task_completion": metrics["task_completion_rate"] >= 0.85,
+            "handoff_context": metrics["handoff_context_completeness_rate"] >= 0.90,
+            "satisfaction": metrics["average_satisfaction"] >= 4.0,
+            "repeat_questions": metrics["repeated_core_question_rate"] <= 0.20,
+            "first_response": metrics["median_first_response_seconds"] <= 60,
+            "failures_classified": metrics["unclassified_failure_count"] == 0,
+            "cost_configured": (
+                release.input_cost_per_million > 0
+                and release.output_cost_per_million > 0
+            ),
+        }
+        decision = "PENDING"
+        if not all(hard_gates.values()):
+            decision = "NO_GO" if release.status == "closed" else "PENDING"
+        elif release.status == "closed":
+            decision = "GO" if all(product_gates.values()) else "NO_GO"
+        return {
+            "release": release,
+            "filters": {"scenario": scenario, "participant_code": participant_code},
+            "metrics": metrics,
+            "hard_gates": hard_gates,
+            "product_gates": product_gates,
+            "decision": decision,
+        }
+
+    def snapshot_pilot_metrics(self, auth: AuthContext, pilot_id: str):
+        report = self.pilot_release_metrics(auth, pilot_id)
+        snapshot = PilotMetricSnapshot(
+            snapshot_id=f"pilot_snapshot_{uuid4().hex}",
+            tenant_id=auth.tenant_id,
+            pilot_id=pilot_id,
+            metrics=report["metrics"],
+            safety={
+                "hard_gates": report["hard_gates"],
+                "product_gates": report["product_gates"],
+                "decision": report["decision"],
+            },
+        )
+        self.repository.save_pilot_metric_snapshot(snapshot)
+        self._audit(auth, "pilot.snapshot", "pilot", pilot_id)
+        return snapshot
+
+    def close_pilot(self, auth: AuthContext, pilot_id: str):
+        require_roles(auth, "tenant_admin")
+        try:
+            release = self.repository.close_pilot(pilot_id, auth.tenant_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if release is None:
+            raise HTTPException(status_code=404, detail="Pilot not found")
+        # Snapshot after the immutable close transition so the retained evidence
+        # contains the final GO/NO-GO decision rather than the pre-close PENDING state.
+        self.snapshot_pilot_metrics(auth, pilot_id)
+        self._audit(auth, "pilot.close", "pilot", pilot_id)
+        return self.pilot_release_metrics(auth, pilot_id)
+
+    def pilot_report(self, auth: AuthContext, pilot_id: str):
+        report = self.pilot_release_metrics(auth, pilot_id)
+        report["participants"] = self.repository.list_pilot_participants(
+            pilot_id, auth.tenant_id
+        )
+        report["tasks"] = self.repository.list_pilot_tasks(pilot_id, auth.tenant_id)
+        report["feedback"] = self.repository.list_pilot_feedback(
+            pilot_id, auth.tenant_id
+        )
+        report["snapshots"] = self.repository.list_pilot_metric_snapshots(
+            pilot_id, auth.tenant_id
+        )
+        return report
 
     @staticmethod
     def _numeric_delta(left, right):

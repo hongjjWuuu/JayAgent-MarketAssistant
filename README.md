@@ -1,5 +1,7 @@
 # JayAgent Market Assistant
 
+当前候选版本：`v0.7.0-m4-rc1`。M3 单机准入已完成，M4 内部受控试点基础设施已实现；真实参与者运行和 GO/NO-GO 证据尚未产生。
+
 面向电商售后场景的、可治理的多租户客户 Agent 试点。它不是“聊天 Demo”：订单事实、政策证据、写动作、人工接管和任务恢复分别由确定性边界负责。
 
 ## 已落地的纵向链路
@@ -44,6 +46,20 @@ docker compose up --build
 
 演示账号密码均为 `demo1234`：`customer_001`、`agent_001`、`admin_001`、`platform_admin_001`。
 
+### M4 局域网 HTTPS 内部试点
+
+M4 使用独立 Compose 项目和数据卷，不复用开发环境。先复制配置并填写随机密码、DeepSeek Key 与实际 Token 单价：
+
+```powershell
+Copy-Item .env.m4-pilot.example .env.m4-pilot
+& .\scripts\setup_m4_pilot.ps1 -InstallCertificate -ConfigureHosts -KeepServicesRunning
+# 参与者全部同意后，在 .env.m4-pilot 设置人数和 PILOT_CONSENT_CONFIRMED=true：
+& .\scripts\setup_m4_pilot.ps1 -FreezeRelease -KeepServicesRunning
+& .\scripts\verify_m4_readiness.ps1 -RunLiveDeepSeekSmoke
+```
+
+入口为 `https://marketassistant.test`。启动脚本会 Seed 30 张冻结仿真订单、初始化 `bge-m3-v10`、轮换试点账号密码，并冻结 Git SHA、镜像摘要、模型、Prompt、政策、数据集与配置哈希。局域网客户端安装见 [M4 任务书](docs/M4_PILOT_TASK_BOOK.md)，隐私与留存见 [M4 数据说明](docs/M4_DATA_AND_PRIVACY.md)。`.env.m4-pilot` 和运行证据目录不会提交 Git。
+
 ### 快速本地开发
 
 默认配置使用内存 Repository 和显式开发认证，适合单测与接口开发：
@@ -72,7 +88,7 @@ npm run dev
 
 补偿不会直接发放：`submit_compensation` 只创建高优先级人工审批工单。
 
-完整接口和状态机见 [架构说明](docs/ARCHITECTURE.md)，运维步骤见 [试点运行手册](docs/RUNBOOK.md)，当前完成度和下一阶段安排见 [实施进度与优化路线](docs/IMPLEMENTATION_STATUS.md)。阶段资料包括 [第一周 PostgreSQL 验收](docs/WEEK1_POSTGRESQL_EXECUTION_PLAN.md)、[第二周 Worker 可靠性验收](docs/WEEK2_WORKER_RELIABILITY_EXECUTION.md)、[第三周 OIDC 授权验收](docs/WEEK3_OIDC_AUTHORIZATION_EXECUTION.md)、[第四周 RAG/Answerability 实施计划](docs/WEEK4_RAG_ANSWERABILITY_IMPLEMENTATION_PLAN.md) 与 [第四周实施验收](docs/WEEK4_RAG_ANSWERABILITY_EXECUTION.md)。
+完整接口和状态机见 [架构说明](docs/ARCHITECTURE.md)，运维步骤见 [试点运行手册](docs/RUNBOOK.md)，当前完成度和下一阶段安排见 [实施进度与优化路线](docs/IMPLEMENTATION_STATUS.md)。阶段资料包括 [第一周 PostgreSQL 验收](docs/WEEK1_POSTGRESQL_EXECUTION_PLAN.md)、[第二周 Worker 可靠性验收](docs/WEEK2_WORKER_RELIABILITY_EXECUTION.md)、[第三周 OIDC 授权验收](docs/WEEK3_OIDC_AUTHORIZATION_EXECUTION.md)、[第四周 RAG/Answerability 实施计划](docs/WEEK4_RAG_ANSWERABILITY_IMPLEMENTATION_PLAN.md)、[第四周实施验收](docs/WEEK4_RAG_ANSWERABILITY_EXECUTION.md) 与 [M4 内部试点任务书](docs/M4_PILOT_TASK_BOOK.md)。
 
 ## 验证
 

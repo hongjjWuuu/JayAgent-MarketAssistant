@@ -1,0 +1,90 @@
+services:
+  postgres:
+    ports: !override ["127.0.0.1:${M4_POSTGRES_PORT:-15434}:5432"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.m4-pilot}
+    volumes: !override [m4-postgres:/var/lib/postgresql/data]
+  redis:
+    ports: !reset []
+    volumes: !override [m4-redis:/data]
+  embedding:
+    ports: !override ["127.0.0.1:${M4_EMBEDDING_PORT:-17998}:7997"]
+    volumes: !override [m4-embedding-cache:/app/.cache]
+  simulator:
+    ports: !reset []
+    environment:
+      SIMULATOR_CONTROL_TOKEN: ${SIMULATOR_CONTROL_TOKEN:?set SIMULATOR_CONTROL_TOKEN in .env.m4-pilot}
+    volumes: !override [m4-simulator:/data]
+  keycloak:
+    ports: !reset []
+    environment:
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env.m4-pilot}
+      KC_HOSTNAME: https://auth.${PILOT_HOST:-test}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+  migrate:
+    environment:
+      DATABASE_URL: postgresql+psycopg://market_agent:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.m4-pilot}@postgres:5432/market_agent
+  seed:
+    environment:
+      DATABASE_URL: postgresql+psycopg://market_agent:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.m4-pilot}@postgres:5432/market_agent
+  api:
+    ports: !reset []
+    environment:
+      DATABASE_URL: postgresql+psycopg://market_agent:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.m4-pilot}@postgres:5432/market_agent
+      OIDC_ISSUER: https://auth.${PILOT_HOST:-test}/realms/market-assistant
+      OIDC_JWKS_URL: http://keycloak:8080/realms/market-assistant/protocol/openid-connect/certs
+      CORS_ORIGINS: https://marketassistant.${PILOT_HOST:-test}
+      LLM_INPUT_COST_PER_MILLION: ${LLM_INPUT_COST_PER_MILLION:?set actual input price}
+      LLM_OUTPUT_COST_PER_MILLION: ${LLM_OUTPUT_COST_PER_MILLION:?set actual output price}
+      RETRIEVAL_PROFILE_ID: ${RETRIEVAL_PROFILE_ID:-bge-m3-v10}
+  worker:
+    ports: !reset []
+    environment:
+      DATABASE_URL: postgresql+psycopg://market_agent:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.m4-pilot}@postgres:5432/market_agent
+      LLM_INPUT_COST_PER_MILLION: ${LLM_INPUT_COST_PER_MILLION:?set actual input price}
+      LLM_OUTPUT_COST_PER_MILLION: ${LLM_OUTPUT_COST_PER_MILLION:?set actual output price}
+      RETRIEVAL_PROFILE_ID: ${RETRIEVAL_PROFILE_ID:-bge-m3-v10}
+  web:
+    ports: !reset []
+    build:
+      context: ./web
+      args:
+        VITE_AUTH_MODE: oidc
+        VITE_API_URL: https://api.${PILOT_HOST:-test}
+        VITE_KEYCLOAK_URL: https://auth.${PILOT_HOST:-test}
+  prometheus:
+    ports: !reset []
+    volumes: !override
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - m4-prometheus:/prometheus
+  caddy:
+    image: jayagent-marketassistant-caddy:m4-rc1
+    build:
+      context: .
+      dockerfile: deploy/caddy/Dockerfile.hardened
+    environment:
+      PILOT_HOST: ${PILOT_HOST:-test}
+    ports:
+      - "${PILOT_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/caddy/Caddyfile.m4:/etc/caddy/Caddyfile:ro
+      - m4-caddy-data:/data
+      - m4-caddy-config:/config
+    depends_on:
+      api: {condition: service_healthy}
+      web: {condition: service_started}
+      keycloak: {condition: service_started}
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.50
+
+volumes:
+  m4-postgres:
+  m4-redis:
+  m4-embedding-cache:
+  m4-prometheus:
+  m4-simulator:
+  m4-caddy-data:
+  m4-caddy-config:

@@ -1,0 +1,31 @@
+FROM golang:1.26.9-alpine AS builder
+
+ARG CADDY_VERSION=v2.11.7
+
+RUN apk add --no-cache ca-certificates git
+WORKDIR /src
+RUN go mod init market-assistant-caddy \
+    && go get github.com/caddyserver/caddy/v2/cmd/caddy@${CADDY_VERSION} \
+    && go get golang.org/x/net@v0.60.0 \
+    && go get github.com/go-jose/go-jose/v4@v4.1.6 \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/caddy github.com/caddyserver/caddy/v2/cmd/caddy
+
+FROM alpine:3.23
+
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates mailcap tzdata \
+    && addgroup -S caddy \
+    && adduser -S -D -H -s /sbin/nologin -G caddy caddy \
+    && mkdir -p /config/caddy /data/caddy /etc/caddy \
+    && chown -R caddy:caddy /config /data
+
+COPY --from=builder /out/caddy /usr/bin/caddy
+
+ENV XDG_CONFIG_HOME=/config \
+    XDG_DATA_HOME=/data
+
+EXPOSE 80 443 443/udp 2019
+USER caddy
+WORKDIR /srv
+ENTRYPOINT ["caddy"]
+CMD ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

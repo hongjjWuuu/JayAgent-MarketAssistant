@@ -1,5 +1,6 @@
 .env
 .env.m3-drill
+.env.m4-pilot
 .venv/
 *.egg-info/
 __pycache__/
@@ -18,3 +19,4 @@ web/vite.config.d.ts
 backups/
 output/test-data/
 output/m3/
+output/m4/

@@ -42,6 +42,29 @@ def test_pilot_metrics_use_postgresql_aggregation(postgres_repository):
     assert 0 <= metrics["handoff_rate"] <= 1
     assert "estimated_cost" in metrics
 
+
+def test_pilot_metrics_can_be_scoped_to_release_conversations(postgres_repository):
+    selected = Conversation(
+        conversation_id=unique("conv_pilot_selected"),
+        tenant_id="tenant_contract",
+        customer_id="customer_contract",
+    )
+    unrelated = Conversation(
+        conversation_id=unique("conv_pilot_unrelated"),
+        tenant_id="tenant_contract",
+        customer_id="customer_contract",
+    )
+    postgres_repository.save_conversation(selected)
+    postgres_repository.save_conversation(unrelated)
+
+    metrics = postgres_repository.pilot_metrics(
+        "tenant_contract", {selected.conversation_id}
+    )
+
+    assert metrics["conversation_count"] == 1
+    assert metrics["unsafe_write_count"] == 0
+    assert metrics["duplicate_execution_count"] == 0
+
 pytestmark = pytest.mark.integration
 
 

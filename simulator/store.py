@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from app.pilot_dataset import build_m4_orders
+
 
 class SimulatorStore:
     """Small durable third-party state store with database-enforced idempotency."""
@@ -62,6 +64,25 @@ class SimulatorStore:
                     "TRACK-1001",
                     "demo-logistics",
                 ),
+            )
+            connection.executemany(
+                """INSERT INTO orders(
+                    order_id, tenant_id, customer_id, status, total_amount,
+                    shipment_status, tracking_number, carrier
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                [
+                    (
+                        item["order_id"],
+                        item["tenant_id"],
+                        item["customer_id"],
+                        item["status"],
+                        item["total_amount"],
+                        item["shipment_status"],
+                        item["tracking_number"],
+                        item["carrier"],
+                    )
+                    for item in build_m4_orders()
+                ],
             )
 
     def configure_fault(self, operation: str, mode: str, value: Any = None) -> None:

@@ -25,7 +25,7 @@ REQUESTS = Counter(
 )
 LATENCY = Histogram("market_assistant_http_request_seconds", "HTTP request latency", ["path"])
 
-app = FastAPI(title=settings.app_name, version="0.6.0-rc1")
+app = FastAPI(title=settings.app_name, version="0.7.0-m4-rc1")
 app.add_middleware(AuthenticationMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(

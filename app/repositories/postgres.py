@@ -28,6 +28,11 @@ from app.domain.models import (
     LlmTrace,
     Message,
     Order,
+    PilotFeedback,
+    PilotMetricSnapshot,
+    PilotParticipant,
+    PilotRelease,
+    PilotTaskAssignment,
     PolicyVersion,
     RetrievalProfile,
     RetrievalSnapshot,
@@ -55,6 +60,11 @@ from app.persistence.models import (
     LlmTraceRow,
     MessageRow,
     OrderRow,
+    PilotFeedbackRow,
+    PilotMetricSnapshotRow,
+    PilotParticipantRow,
+    PilotReleaseRow,
+    PilotTaskAssignmentRow,
     PolicyChunkEmbeddingRow,
     PolicyChunkRow,
     PolicyDocumentRow,
@@ -2555,36 +2565,394 @@ class PostgresRepository:
             )
             return [self._agent_run(row) for row in rows]
 
-    def pilot_metrics(self, tenant_id: str) -> dict:
+    @staticmethod
+    def _pilot_release(row: PilotReleaseRow) -> PilotRelease:
+        return PilotRelease(
+            pilot_id=row.id,
+            tenant_id=row.tenant_id,
+            version=row.version,
+            status=row.status,
+            git_sha=row.git_sha,
+            image_digests=row.image_digests or {},
+            llm_model=row.llm_model,
+            prompt_version=row.prompt_version,
+            graph_version=row.graph_version,
+            retrieval_profile_id=row.retrieval_profile_id,
+            policy_corpus_hash=row.policy_corpus_hash,
+            dataset_version=row.dataset_version,
+            dataset_hash=row.dataset_hash,
+            connector_mode=row.connector_mode,
+            alembic_revision=row.alembic_revision,
+            input_cost_per_million=row.input_cost_per_million,
+            output_cost_per_million=row.output_cost_per_million,
+            config_hash=row.config_hash,
+            created_by=row.created_by,
+            created_at=row.created_at,
+            frozen_at=row.frozen_at,
+            closed_at=row.closed_at,
+        )
+
+    @staticmethod
+    def _pilot_participant(row: PilotParticipantRow) -> PilotParticipant:
+        return PilotParticipant(
+            participant_id=row.id,
+            tenant_id=row.tenant_id,
+            pilot_id=row.pilot_id,
+            participant_code=row.participant_code,
+            role=row.role,
+            subject=row.subject,
+            active=row.active,
+            consented_at=row.consented_at,
+            created_at=row.created_at,
+        )
+
+    @staticmethod
+    def _pilot_task(row: PilotTaskAssignmentRow) -> PilotTaskAssignment:
+        return PilotTaskAssignment(
+            assignment_id=row.id,
+            tenant_id=row.tenant_id,
+            pilot_id=row.pilot_id,
+            participant_code=row.participant_code,
+            scenario=row.scenario,
+            expected_outcome=row.expected_outcome,
+            status=row.status,
+            conversation_id=row.conversation_id,
+            handoff_id=row.handoff_id,
+            ticket_id=row.ticket_id,
+            failure_category=row.failure_category,
+            notes_redacted=row.notes_redacted,
+            started_at=row.started_at,
+            completed_at=row.completed_at,
+            created_at=row.created_at,
+        )
+
+    @staticmethod
+    def _pilot_feedback(row: PilotFeedbackRow) -> PilotFeedback:
+        return PilotFeedback(
+            feedback_id=row.id,
+            tenant_id=row.tenant_id,
+            pilot_id=row.pilot_id,
+            assignment_id=row.assignment_id,
+            conversation_id=row.conversation_id,
+            participant_code=row.participant_code,
+            completed=row.completed,
+            rating=row.rating,
+            confusion_tags=row.confusion_tags or [],
+            comment_redacted=row.comment_redacted,
+            created_at=row.created_at,
+        )
+
+    @staticmethod
+    def _pilot_snapshot(row: PilotMetricSnapshotRow) -> PilotMetricSnapshot:
+        return PilotMetricSnapshot(
+            snapshot_id=row.id,
+            tenant_id=row.tenant_id,
+            pilot_id=row.pilot_id,
+            metrics=row.metrics or {},
+            safety=row.safety or {},
+            created_at=row.created_at,
+        )
+
+    def create_pilot(
+        self,
+        release: PilotRelease,
+        participants: list[PilotParticipant],
+        tasks: list[PilotTaskAssignment],
+    ) -> PilotRelease:
+        try:
+            with self.session_factory.begin() as session:
+                session.add(
+                    PilotReleaseRow(
+                        id=release.pilot_id,
+                        tenant_id=release.tenant_id,
+                        version=release.version,
+                        status=release.status,
+                        git_sha=release.git_sha,
+                        image_digests=release.image_digests,
+                        llm_model=release.llm_model,
+                        prompt_version=release.prompt_version,
+                        graph_version=release.graph_version,
+                        retrieval_profile_id=release.retrieval_profile_id,
+                        policy_corpus_hash=release.policy_corpus_hash,
+                        dataset_version=release.dataset_version,
+                        dataset_hash=release.dataset_hash,
+                        connector_mode=release.connector_mode,
+                        alembic_revision=release.alembic_revision,
+                        input_cost_per_million=release.input_cost_per_million,
+                        output_cost_per_million=release.output_cost_per_million,
+                        config_hash=release.config_hash,
+                        created_by=release.created_by,
+                        created_at=release.created_at,
+                    )
+                )
+                session.add_all(
+                    [
+                        PilotParticipantRow(
+                            id=item.participant_id,
+                            tenant_id=item.tenant_id,
+                            pilot_id=item.pilot_id,
+                            participant_code=item.participant_code,
+                            role=item.role,
+                            subject=item.subject,
+                            active=item.active,
+                            consented_at=item.consented_at,
+                            created_at=item.created_at,
+                        )
+                        for item in participants
+                    ]
+                )
+                session.add_all(
+                    [
+                        PilotTaskAssignmentRow(
+                            id=item.assignment_id,
+                            tenant_id=item.tenant_id,
+                            pilot_id=item.pilot_id,
+                            participant_code=item.participant_code,
+                            scenario=item.scenario,
+                            expected_outcome=item.expected_outcome,
+                            status=item.status,
+                            conversation_id=item.conversation_id,
+                            handoff_id=item.handoff_id,
+                            ticket_id=item.ticket_id,
+                            failure_category=item.failure_category,
+                            notes_redacted=item.notes_redacted,
+                            started_at=item.started_at,
+                            completed_at=item.completed_at,
+                            created_at=item.created_at,
+                        )
+                        for item in tasks
+                    ]
+                )
+        except IntegrityError as exc:
+            raise ValueError("Pilot version, participant or task already exists") from exc
+        return release
+
+    def get_pilot(self, pilot_id: str, tenant_id: str) -> PilotRelease | None:
+        with self.session_factory() as session:
+            row = session.scalar(
+                select(PilotReleaseRow).where(
+                    PilotReleaseRow.id == pilot_id,
+                    PilotReleaseRow.tenant_id == tenant_id,
+                )
+            )
+            return self._pilot_release(row) if row else None
+
+    def list_pilot_participants(
+        self, pilot_id: str, tenant_id: str
+    ) -> list[PilotParticipant]:
+        with self.session_factory() as session:
+            rows = session.scalars(
+                select(PilotParticipantRow)
+                .where(
+                    PilotParticipantRow.pilot_id == pilot_id,
+                    PilotParticipantRow.tenant_id == tenant_id,
+                )
+                .order_by(PilotParticipantRow.participant_code)
+            )
+            return [self._pilot_participant(row) for row in rows]
+
+    def find_active_pilot_participant(
+        self, tenant_id: str, subject: str
+    ) -> PilotParticipant | None:
+        with self.session_factory() as session:
+            row = session.scalar(
+                select(PilotParticipantRow)
+                .join(PilotReleaseRow, PilotReleaseRow.id == PilotParticipantRow.pilot_id)
+                .where(
+                    PilotParticipantRow.tenant_id == tenant_id,
+                    PilotParticipantRow.subject == subject,
+                    PilotParticipantRow.active.is_(True),
+                    PilotReleaseRow.status == "frozen",
+                )
+                .order_by(PilotReleaseRow.frozen_at.desc())
+            )
+            return self._pilot_participant(row) if row else None
+
+    def list_pilot_tasks(
+        self, pilot_id: str, tenant_id: str
+    ) -> list[PilotTaskAssignment]:
+        with self.session_factory() as session:
+            rows = session.scalars(
+                select(PilotTaskAssignmentRow)
+                .where(
+                    PilotTaskAssignmentRow.pilot_id == pilot_id,
+                    PilotTaskAssignmentRow.tenant_id == tenant_id,
+                )
+                .order_by(
+                    PilotTaskAssignmentRow.participant_code,
+                    PilotTaskAssignmentRow.created_at,
+                )
+            )
+            return [self._pilot_task(row) for row in rows]
+
+    def freeze_pilot(self, pilot_id: str, tenant_id: str) -> PilotRelease | None:
+        with self.session_factory.begin() as session:
+            row = session.scalar(
+                select(PilotReleaseRow)
+                .where(
+                    PilotReleaseRow.id == pilot_id,
+                    PilotReleaseRow.tenant_id == tenant_id,
+                )
+                .with_for_update()
+            )
+            if row is None:
+                return None
+            if row.status != "draft":
+                raise ValueError("Only draft pilots can be frozen")
+            row.status = "frozen"
+            row.frozen_at = utc_now()
+            session.flush()
+            return self._pilot_release(row)
+
+    def close_pilot(self, pilot_id: str, tenant_id: str) -> PilotRelease | None:
+        with self.session_factory.begin() as session:
+            row = session.scalar(
+                select(PilotReleaseRow)
+                .where(
+                    PilotReleaseRow.id == pilot_id,
+                    PilotReleaseRow.tenant_id == tenant_id,
+                )
+                .with_for_update()
+            )
+            if row is None:
+                return None
+            if row.status != "frozen":
+                raise ValueError("Only frozen pilots can be closed")
+            row.status = "closed"
+            row.closed_at = utc_now()
+            session.flush()
+            return self._pilot_release(row)
+
+    def record_pilot_feedback(self, feedback: PilotFeedback) -> PilotFeedback:
+        try:
+            with self.session_factory.begin() as session:
+                if feedback.assignment_id:
+                    task = session.scalar(
+                        select(PilotTaskAssignmentRow)
+                        .where(
+                            PilotTaskAssignmentRow.id == feedback.assignment_id,
+                            PilotTaskAssignmentRow.tenant_id == feedback.tenant_id,
+                            PilotTaskAssignmentRow.pilot_id == feedback.pilot_id,
+                            PilotTaskAssignmentRow.participant_code
+                            == feedback.participant_code,
+                        )
+                        .with_for_update()
+                    )
+                    if task is None:
+                        raise ValueError("Pilot task not found")
+                    task.conversation_id = feedback.conversation_id
+                    task.status = "completed" if feedback.completed else "failed"
+                    task.started_at = task.started_at or feedback.created_at
+                    task.completed_at = feedback.created_at
+                    task.notes_redacted = feedback.comment_redacted
+                session.add(
+                    PilotFeedbackRow(
+                        id=feedback.feedback_id,
+                        tenant_id=feedback.tenant_id,
+                        pilot_id=feedback.pilot_id,
+                        assignment_id=feedback.assignment_id,
+                        conversation_id=feedback.conversation_id,
+                        participant_code=feedback.participant_code,
+                        completed=feedback.completed,
+                        rating=feedback.rating,
+                        confusion_tags=feedback.confusion_tags,
+                        comment_redacted=feedback.comment_redacted,
+                        created_at=feedback.created_at,
+                    )
+                )
+        except IntegrityError as exc:
+            raise ValueError("Feedback already exists for this conversation") from exc
+        return feedback
+
+    def list_pilot_feedback(
+        self, pilot_id: str, tenant_id: str
+    ) -> list[PilotFeedback]:
+        with self.session_factory() as session:
+            rows = session.scalars(
+                select(PilotFeedbackRow)
+                .where(
+                    PilotFeedbackRow.pilot_id == pilot_id,
+                    PilotFeedbackRow.tenant_id == tenant_id,
+                )
+                .order_by(PilotFeedbackRow.created_at)
+            )
+            return [self._pilot_feedback(row) for row in rows]
+
+    def save_pilot_metric_snapshot(
+        self, snapshot: PilotMetricSnapshot
+    ) -> PilotMetricSnapshot:
+        with self.session_factory.begin() as session:
+            session.add(
+                PilotMetricSnapshotRow(
+                    id=snapshot.snapshot_id,
+                    tenant_id=snapshot.tenant_id,
+                    pilot_id=snapshot.pilot_id,
+                    metrics=snapshot.metrics,
+                    safety=snapshot.safety,
+                    created_at=snapshot.created_at,
+                )
+            )
+        return snapshot
+
+    def list_pilot_metric_snapshots(
+        self, pilot_id: str, tenant_id: str
+    ) -> list[PilotMetricSnapshot]:
+        with self.session_factory() as session:
+            rows = session.scalars(
+                select(PilotMetricSnapshotRow)
+                .where(
+                    PilotMetricSnapshotRow.pilot_id == pilot_id,
+                    PilotMetricSnapshotRow.tenant_id == tenant_id,
+                )
+                .order_by(PilotMetricSnapshotRow.created_at)
+            )
+            return [self._pilot_snapshot(row) for row in rows]
+
+    def pilot_metrics(
+        self, tenant_id: str, conversation_ids: set[str] | None = None
+    ) -> dict:
         """Aggregate pilot KPIs in PostgreSQL without loading tenant history into API memory."""
 
         statement = text(
             """
             SELECT
-              (SELECT count(*) FROM conversation WHERE tenant_id = :tenant_id) AS conversation_count,
-              (SELECT count(*) FROM conversation WHERE tenant_id = :tenant_id AND status IN ('resolved','closed')) AS resolved_count,
+              (SELECT count(*) FROM conversation WHERE tenant_id = :tenant_id AND (:all_rows OR id = ANY(:conversation_ids))) AS conversation_count,
+              (SELECT count(*) FROM conversation WHERE tenant_id = :tenant_id AND (:all_rows OR id = ANY(:conversation_ids)) AND status IN ('resolved','closed')) AS resolved_count,
               (SELECT count(*) FROM conversation c WHERE c.tenant_id = :tenant_id
+                 AND (:all_rows OR c.id = ANY(:conversation_ids))
                  AND c.status IN ('resolved','closed')
                  AND NOT EXISTS (SELECT 1 FROM handoff h WHERE h.tenant_id = c.tenant_id AND h.conversation_id = c.id)) AS self_resolved_count,
-              (SELECT count(DISTINCT conversation_id) FROM handoff WHERE tenant_id = :tenant_id) AS handed_conversation_count,
-              (SELECT count(*) FROM handoff WHERE tenant_id = :tenant_id) AS handoff_count,
-              (SELECT count(*) FROM handoff WHERE tenant_id = :tenant_id AND status = 'resolved') AS resolved_handoff_count,
-              (SELECT count(*) FROM ticket WHERE tenant_id = :tenant_id) AS ticket_count,
-              (SELECT count(*) FROM ticket WHERE tenant_id = :tenant_id AND status = 'open') AS open_ticket_count,
+              (SELECT count(DISTINCT conversation_id) FROM handoff WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS handed_conversation_count,
+              (SELECT count(*) FROM handoff WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS handoff_count,
+              (SELECT count(*) FROM handoff WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids)) AND status = 'resolved') AS resolved_handoff_count,
+              (SELECT count(*) FROM ticket WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS ticket_count,
+              (SELECT count(*) FROM ticket WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids)) AND status = 'open') AS open_ticket_count,
               (SELECT coalesce(avg(extract(epoch FROM ((context_snapshot->>'first_response_at')::timestamptz - created_at))),0)
-                 FROM handoff WHERE tenant_id = :tenant_id AND context_snapshot->>'first_response_at' IS NOT NULL) AS average_first_response_seconds,
+                 FROM handoff WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids)) AND context_snapshot->>'first_response_at' IS NOT NULL) AS average_first_response_seconds,
               (SELECT coalesce(avg(extract(epoch FROM ((context_snapshot->>'resolved_at')::timestamptz - created_at))),0)
-                 FROM handoff WHERE tenant_id = :tenant_id AND context_snapshot->>'resolved_at' IS NOT NULL) AS average_resolution_seconds,
-              (SELECT count(*) FROM agent_run WHERE tenant_id = :tenant_id) AS agent_run_count,
-              (SELECT coalesce(percentile_disc(0.95) WITHIN GROUP (ORDER BY latency_ms),0) FROM agent_run WHERE tenant_id = :tenant_id) AS agent_p95_latency_ms,
-              (SELECT count(*) FROM agent_run WHERE tenant_id = :tenant_id AND error_code IS NOT NULL) AS failed_agent_run_count,
-              (SELECT coalesce(sum(input_tokens),0) FROM agent_run WHERE tenant_id = :tenant_id) AS input_tokens,
-              (SELECT coalesce(sum(output_tokens),0) FROM agent_run WHERE tenant_id = :tenant_id) AS output_tokens,
-              (SELECT coalesce(sum(estimated_cost),0) FROM agent_run WHERE tenant_id = :tenant_id) AS estimated_cost
+                 FROM handoff WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids)) AND context_snapshot->>'resolved_at' IS NOT NULL) AS average_resolution_seconds,
+              (SELECT count(*) FROM agent_run WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS agent_run_count,
+              (SELECT coalesce(percentile_disc(0.95) WITHIN GROUP (ORDER BY latency_ms),0) FROM agent_run WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS agent_p95_latency_ms,
+              (SELECT count(*) FROM agent_run WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids)) AND error_code IS NOT NULL) AS failed_agent_run_count,
+              (SELECT coalesce(sum(input_tokens),0) FROM agent_run WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS input_tokens,
+              (SELECT coalesce(sum(output_tokens),0) FROM agent_run WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS output_tokens,
+              (SELECT coalesce(sum(estimated_cost),0) FROM agent_run WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS estimated_cost,
+              (SELECT coalesce(percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms),0) FROM tool_call_log WHERE tenant_id = :tenant_id AND tool_name = 'get_order' AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS order_query_p95_latency_ms,
+              (SELECT count(*) FROM action_execution e JOIN action_plan p ON p.id = e.action_plan_id WHERE e.tenant_id = :tenant_id AND (:all_rows OR p.conversation_id = ANY(:conversation_ids)) AND p.status IN ('draft','validated','approval_required')) AS unsafe_write_count,
+              (SELECT count(*) FROM tool_call_log WHERE tenant_id = :tenant_id AND (:all_rows OR conversation_id = ANY(:conversation_ids)) AND tool_name IN ('refund','issue_coupon','apply_compensation') AND status = 'succeeded') AS automatic_high_risk_action_count,
+              (SELECT coalesce(sum(item_count - 1),0) FROM (SELECT count(*) AS item_count FROM action_execution e JOIN action_plan p ON p.id = e.action_plan_id WHERE e.tenant_id = :tenant_id AND (:all_rows OR p.conversation_id = ANY(:conversation_ids)) GROUP BY e.idempotency_key HAVING count(*) > 1) duplicates) AS duplicate_execution_count,
+              (SELECT count(*) FROM runtime_task WHERE tenant_id = :tenant_id AND status = 'dead_letter' AND (:all_rows OR conversation_id = ANY(:conversation_ids))) AS dead_letter_count
             """
         )
         with self.session_factory() as session:
-            row = session.execute(statement, {"tenant_id": tenant_id}).mappings().one()
+            row = session.execute(
+                statement,
+                {
+                    "tenant_id": tenant_id,
+                    "all_rows": conversation_ids is None,
+                    "conversation_ids": list(conversation_ids or {"__none__"}),
+                },
+            ).mappings().one()
 
         def ratio(numerator: int, denominator: int) -> float:
             return numerator / denominator if denominator else 0.0
@@ -2607,9 +2975,15 @@ class PostgresRepository:
             "average_resolution_seconds": float(row["average_resolution_seconds"]),
             "agent_run_count": runs,
             "agent_p95_latency_ms": int(row["agent_p95_latency_ms"]),
+            "order_query_p95_latency_ms": int(row["order_query_p95_latency_ms"]),
             "tool_failure_rate": ratio(int(row["failed_agent_run_count"]), runs),
             "input_tokens": int(row["input_tokens"]),
             "output_tokens": int(row["output_tokens"]),
             "estimated_cost": float(row["estimated_cost"]),
-            "unsafe_write_count": 0,
+            "unsafe_write_count": int(row["unsafe_write_count"]),
+            "automatic_high_risk_action_count": int(
+                row["automatic_high_risk_action_count"]
+            ),
+            "duplicate_execution_count": int(row["duplicate_execution_count"]),
+            "dead_letter_count": int(row["dead_letter_count"]),
         }

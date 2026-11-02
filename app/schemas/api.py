@@ -147,3 +147,44 @@ class ReconciliationResolve(BaseModel):
     outcome: Literal["succeeded", "failed", "compensation_required"]
     reason: str = Field(min_length=3, max_length=500)
     receipt: dict[str, Any] = Field(default_factory=dict)
+
+
+class PilotParticipantInput(BaseModel):
+    participant_code: str = Field(pattern=r"^P\d{2}$")
+    role: Literal["customer", "agent", "tenant_admin"]
+    subject: str = Field(min_length=1, max_length=160)
+    consented_at: datetime | None = None
+
+
+class PilotTaskInput(BaseModel):
+    participant_code: str = Field(pattern=r"^P\d{2}$")
+    scenario: Literal["order", "shipment", "policy", "ticket", "handoff"]
+    expected_outcome: str = Field(min_length=1, max_length=500)
+
+
+class PilotCreate(BaseModel):
+    version: str = Field(min_length=1, max_length=80)
+    git_sha: str = Field(pattern=r"^[0-9a-f]{7,40}$")
+    image_digests: dict[str, str] = Field(default_factory=dict)
+    llm_model: str = Field(min_length=1, max_length=160)
+    prompt_version: str = Field(min_length=1, max_length=80)
+    graph_version: str = Field(min_length=1, max_length=80)
+    retrieval_profile_id: str = Field(min_length=1, max_length=80)
+    policy_corpus_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    dataset_version: str = Field(default="m4_pilot/v1", min_length=1, max_length=80)
+    dataset_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    connector_mode: Literal["repository", "http"] = "http"
+    alembic_revision: str = Field(min_length=1, max_length=80)
+    input_cost_per_million: float = Field(ge=0)
+    output_cost_per_million: float = Field(ge=0)
+    participants: list[PilotParticipantInput] = Field(min_length=1, max_length=8)
+    tasks: list[PilotTaskInput] = Field(min_length=1, max_length=100)
+
+
+class PilotFeedbackCreate(BaseModel):
+    pilot_id: str = Field(min_length=1, max_length=80)
+    assignment_id: str | None = Field(default=None, min_length=1, max_length=80)
+    completed: bool
+    rating: int = Field(ge=1, le=5)
+    confusion_tags: list[str] = Field(default_factory=list, max_length=10)
+    comment: str = Field(default="", max_length=2000)

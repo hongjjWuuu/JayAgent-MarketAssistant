@@ -653,3 +653,118 @@ class EvaluationResultRow(Base):
     passed: Mapped[bool] = mapped_column(Boolean)
     metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class PilotReleaseRow(Base):
+    __tablename__ = "pilot_release"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(80), index=True)
+    version: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    git_sha: Mapped[str] = mapped_column(String(40))
+    image_digests: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+    llm_model: Mapped[str] = mapped_column(String(160))
+    prompt_version: Mapped[str] = mapped_column(String(80))
+    graph_version: Mapped[str] = mapped_column(String(80))
+    retrieval_profile_id: Mapped[str] = mapped_column(String(80))
+    policy_corpus_hash: Mapped[str] = mapped_column(String(64))
+    dataset_version: Mapped[str] = mapped_column(String(80))
+    dataset_hash: Mapped[str] = mapped_column(String(64))
+    connector_mode: Mapped[str] = mapped_column(String(30))
+    alembic_revision: Mapped[str] = mapped_column(String(80))
+    input_cost_per_million: Mapped[float] = mapped_column(Float, default=0.0)
+    output_cost_per_million: Mapped[float] = mapped_column(Float, default=0.0)
+    config_hash: Mapped[str] = mapped_column(String(64), default="")
+    created_by: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "version", name="uq_pilot_release_tenant_version"),
+        CheckConstraint("status IN ('draft','frozen','closed')", name="ck_pilot_release_status"),
+    )
+
+
+class PilotParticipantRow(Base):
+    __tablename__ = "pilot_participant"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(80), index=True)
+    pilot_id: Mapped[str] = mapped_column(
+        ForeignKey("pilot_release.id", ondelete="CASCADE"), index=True
+    )
+    participant_code: Mapped[str] = mapped_column(String(20))
+    role: Mapped[str] = mapped_column(String(40))
+    subject: Mapped[str] = mapped_column(String(160))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "pilot_id", "participant_code", name="uq_pilot_participant_code"),
+        UniqueConstraint("tenant_id", "pilot_id", "subject", name="uq_pilot_participant_subject"),
+        CheckConstraint("role IN ('customer','agent','tenant_admin')", name="ck_pilot_participant_role"),
+    )
+
+
+class PilotTaskAssignmentRow(Base):
+    __tablename__ = "pilot_task_assignment"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(80), index=True)
+    pilot_id: Mapped[str] = mapped_column(
+        ForeignKey("pilot_release.id", ondelete="CASCADE"), index=True
+    )
+    participant_code: Mapped[str] = mapped_column(String(20), index=True)
+    scenario: Mapped[str] = mapped_column(String(40), index=True)
+    expected_outcome: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(30), default="assigned", index=True)
+    conversation_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    handoff_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ticket_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    failure_category: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    notes_redacted: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('assigned','in_progress','completed','failed','abandoned')",
+            name="ck_pilot_task_status",
+        ),
+    )
+
+
+class PilotFeedbackRow(Base):
+    __tablename__ = "pilot_feedback"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(80), index=True)
+    pilot_id: Mapped[str] = mapped_column(
+        ForeignKey("pilot_release.id", ondelete="CASCADE"), index=True
+    )
+    assignment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("pilot_task_assignment.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    conversation_id: Mapped[str] = mapped_column(String(80), index=True)
+    participant_code: Mapped[str] = mapped_column(String(20), index=True)
+    completed: Mapped[bool] = mapped_column(Boolean)
+    rating: Mapped[int] = mapped_column(Integer)
+    confusion_tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    comment_redacted: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "pilot_id", "conversation_id", "participant_code",
+            name="uq_pilot_feedback_conversation_participant",
+        ),
+        CheckConstraint("rating >= 1 AND rating <= 5", name="ck_pilot_feedback_rating"),
+    )
+
+
+class PilotMetricSnapshotRow(Base):
+    __tablename__ = "pilot_metric_snapshot"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(80), index=True)
+    pilot_id: Mapped[str] = mapped_column(
+        ForeignKey("pilot_release.id", ondelete="CASCADE"), index=True
+    )
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    safety: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
